@@ -1,0 +1,27 @@
+PEPPEZ HARDWARE ANALYTICS - Istruzioni
+
+INSTALLAZIONE RAPIDA
+1. Estrai tutto lo ZIP in una cartella.
+2. Se hai il setup, fai doppio clic su PeppeZ Hardware Analytics Setup.exe e completa l'installazione.
+   Al primo avvio l'app configura automaticamente LibreHardwareMonitor (porta 8085)
+   e prova a installare PawnIO, senza passaggi manuali.
+3. In alternativa (sviluppo / installazione diretta), usa INSTALLA.bat.
+
+CREARE UN VERO SETUP.EXE (opzionale)
+- Doppio clic su CREA-SETUP-EXE.bat: nella cartella "dist" trovi il setup che chiede i permessi di amministratore.
+
+FUNZIONALITA' PRINCIPALI
+- DASHBOARD BIG TECH COMPATTA: Tutte le metriche chiave (CPU, GPU, RAM, Dischi SSD/HDD, Wi-Fi, grafici utilizzo e temperature, stato ventole, info hardware, spazio disco, prestazioni real-time e barra di stato) in un'unica schermata senza scorrimento verticale.
+- DIAGNOSTICA COMPLETA E PULIZIA INTELLIGENTE:
+  * 3 livelli: Rapida, Completa (SFC/DISM, driver, registri eventi Windows) e Approfondita (test RAM e stress test CPU/Disco con conferma esplicita).
+  * Analisi e pulizia intelligente di temporanei, cache browser (Chrome, Edge, Firefox), cache launcher/giochi (Steam, Epic Games), Shader Cache (NVIDIA, AMD, DirectX), residui Windows Update, log/crash/miniature, Cestino e cache app (Discord, Spotify, Adobe), con segnalazione file in uso e conferma obbligatoria.
+  * Punteggio di salute, storico delle anomalie, confronto con le scansioni precedenti ed esportazione del report completo in TXT.
+- MONITORAGGIO AVANZATO E REGISTRAZIONE SENSORI:
+  * Lettura in tempo reale di tutte le temperature, tensioni (voltaggi), frequenze, carichi, ventole (RPM) e consumi energetici realmente esposti dall'hardware.
+  * Registratore dati integrato con avvio/stop manuale, timer di arresto automatico, calcolo Min/Max/Media ed esportazione in TXT e CSV.
+  * Sottosezioni integrate: Performance Monitor & Processi, Fan Control e Scheda Tecnica / Hardware Info.
+- WIDGET DESKTOP PERSISTENTI:
+  * I widget restano sempre visibili sul desktop anche quando apri altre applicazioni, rimanendo dietro le finestre e le cartelle in primo piano (HWND_BOTTOM) senza sovrapporsi al loro contenuto.
+  * Riposizionabili e ridimensionabili direttamente dal desktop.
+
+DISINSTALLAZIONE: DISINSTALLA.bat

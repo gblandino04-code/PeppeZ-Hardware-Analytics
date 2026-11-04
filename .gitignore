@@ -1,0 +1,24 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Electron Builder Output
+dist/
+build/
+
+# Local downloaded runtimes and paths
+LibreHardwareMonitor/
+lhm.path
+*.log
+*.tmp
+*.bin
+peppez-test/
+
+# System and IDE
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store

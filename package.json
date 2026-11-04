@@ -1,0 +1,75 @@
+{
+  "name": "peppez-hardware-analytics",
+  "version": "2.0.0",
+  "description": "PeppeZ Hardware Analytics - Advanced PC Monitoring, Hardware Diagnostics, Disk Space Analyzer & Gaming Optimizer",
+  "main": "main.js",
+  "author": "PeppeZ",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gblandino04-code/PeppeZ-Hardware-Analytics.git"
+  },
+  "homepage": "https://github.com/gblandino04-code/PeppeZ-Hardware-Analytics#readme",
+  "bugs": {
+    "url": "https://github.com/gblandino04-code/PeppeZ-Hardware-Analytics/issues"
+  },
+  "keywords": [
+    "hardware-monitor",
+    "diagnostics",
+    "disk-analyzer",
+    "windirstat",
+    "electron",
+    "gaming-optimizer",
+    "presentmon",
+    "systeminformation",
+    "librehardwaremonitor",
+    "pc-cleaner"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "dependencies": {
+    "systeminformation": "^5.23.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.peppez.hardwareanalytics",
+    "productName": "PeppeZ Hardware Analytics",
+    "files": [
+      "main.js",
+      "preload.js",
+      "sensors.js",
+      "diagnostics.js",
+      "network.js",
+      "gaming.js",
+      "diskanalyzer.js",
+      "fg.ps1",
+      "app/**",
+      "assets/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "assets/**",
+      "fg.ps1"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico",
+      "requestedExecutionLevel": "highestAvailable"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "shortcutName": "PeppeZ Hardware Analytics"
+    }
+  }
+}

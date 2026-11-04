@@ -1,0 +1,283 @@
+<!DOCTYPE html><html lang="it"><head><meta charset="utf-8"><title>PeppeZ Hardware Analytics Widget & Overlay</title><style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:transparent;overflow:hidden;font-family:"Segoe UI",Inter,system-ui,sans-serif;color:#eaf2ff;font-size:13px;user-select:none}
+#w{position:relative;display:inline-block;min-width:185px;padding:10px 14px 14px;border-radius:12px;-webkit-app-region:drag;transform-origin:top left;transition:border-color .2s}
+#w:hover .wbar{opacity:1}
+#w:hover #rz{opacity:1;transform:scale(1.08)}
+.whdr{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:5px;padding-bottom:4px;border-bottom:1px solid #ffffff14;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8da4d0}
+.wbar{display:flex;align-items:center;gap:3px;opacity:.35;transition:opacity .15s;-webkit-app-region:no-drag}
+.wbar span.zval{font-size:9.5px;color:#7dd3fc;padding:0 3px;font-variant-numeric:tabular-nums}
+.wbar button{all:unset;cursor:pointer;width:17px;height:17px;border-radius:4px;background:#ffffff1a;color:#fff;display:grid;place-items:center;font-size:11px;line-height:1}
+.wbar button:hover{background:#00d4ff66}
+#rz{position:absolute;right:2px;bottom:2px;width:16px;height:16px;cursor:nwse-resize;opacity:.45;transition:opacity .15s,transform .15s;-webkit-app-region:no-drag;background:linear-gradient(135deg,transparent 42%,#00d4ff 42%,#00d4ff 58%,transparent 58%,transparent 70%,#00d4ff 70%);border-bottom-right-radius:9px;z-index:20}
+.row{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:3.5px 0;border-bottom:1px solid #ffffff10;font-variant-numeric:tabular-nums;white-space:nowrap}.row:last-child{border:0}
+.m{color:#9db2d8;font-size:11.5px}
+.gs{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;align-items:center;padding-top:2px;max-width:340px}
+.ring{--p:50;--col:#00d4ff;width:72px;height:72px;border-radius:50%;background:conic-gradient(var(--col) calc(var(--p)*1%),#ffffff18 0);display:grid;place-items:center;margin:auto}
+.ring>div{width:56px;height:56px;border-radius:50%;background:#081126;display:grid;place-items:center;font-weight:700;font-size:11.5px;text-align:center;padding:2px;overflow:hidden;font-variant-numeric:tabular-nums}
+.clk{font-size:34px;font-weight:700;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.barwrap{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;max-width:480px}
+canvas.w-graph{width:215px;height:66px;display:block;margin-top:4px}
+.ov{position:absolute;padding:8px 13px;border-radius:9px;font:600 12.5px/1.5 Consolas,"JetBrains Mono",monospace;white-space:nowrap;color:#eaf2ff;box-shadow:0 8px 24px rgba(0,0,0,.45);backdrop-filter:blur(6px);transform-origin:top left}
+.ov .ov-item{display:flex;justify-content:space-between;align-items:center;gap:14px}
+.ov .ov-lbl{color:#9bb2d8;font-size:11.5px}
+.ov.h{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;max-width:92vw}
+.ov.h .ov-item{display:inline-flex;gap:6px}
+canvas.ft-mini{width:96px;height:20px;display:inline-block;vertical-align:middle;margin:0;border-radius:3px;background:#04081499;border:1px solid #ffffff1a}
+</style></head><body>
+<div id="w">
+ <div id="w-body"></div>
+ <div id="rz" title="Trascina per ridimensionare il widget (Ctrl + Rotella per zoom rapido)"></div>
+</div>
+<script>
+const S={
+ fans:[],clk:0,watt:null,gwatt:null,vram:null,vramTot:0,gclk:null,
+ tc:null,tg:null,tgHot:null,ts:null,gpu:null,disk:null,
+ netRx:0,netTx:0,wifi:0,ping:null,jitter:0,pktLoss:0,
+ fps:null,fpsAvg:null,fps1Low:null,fps01Low:null,ft:null,ftHist:[],
+ cpuCoreMax:null,game:"",sessionDurSec:0
+};
+let unit="°C",C=null,lw=0,lh=0,H={};
+const mode=new URLSearchParams(location.search).get("mode");
+if(mode==="overlay"){
+ const wEl=document.getElementById("w");
+ if(wEl)wEl.style.display="none";
+}
+const U=t=>t==null?"--":unit=="°C"?Math.round(t)+"°C":Math.round(t*9/5+32)+"°F";
+const mb=v=>v==null?"0.00 MB/s":(+v).toFixed(v>=10?1:2)+" MB/s";
+const fmtDur=sec=>{
+ const s=Math.max(0,Math.floor(sec||0));
+ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),r=s%60;
+ return h>0?`${h}:${String(m).padStart(2,"0")}:${String(r).padStart(2,"0")}`:`${String(m).padStart(2,"0")}:${String(r).padStart(2,"0")}`;
+};
+
+let dispFps=60,disp1Low=58,disp01Low=55,dispFt=16.7,dispFtHist=[16.7,16.6,16.7,16.8,16.6,16.7];
+(function trackDisplayVSync(){
+ let frames=[],lastT=performance.now();
+ function step(now){
+  const dt=now-lastT;lastT=now;
+  if(dt>1&&dt<200){
+   frames.push(dt);
+   if(frames.length>120)frames.shift();
+   if(frames.length>=15&&frames.length%15===0){
+    const avg=frames.reduce((a,b)=>a+b,0)/frames.length;
+    dispFps=Math.round(1000/avg);
+    dispFt=+avg.toFixed(1);
+    const sorted=[...frames].sort((a,b)=>b-a);
+    disp1Low=Math.min(dispFps,Math.round(1000/(sorted[Math.floor(sorted.length*0.02)]||avg)));
+    disp01Low=Math.min(disp1Low,Math.round(1000/(sorted[0]||avg)));
+    dispFtHist.push(dispFt);
+    if(dispFtHist.length>60)dispFtHist.shift();
+   }
+  }
+  if(S.fps==null)requestAnimationFrame(step);
+  else setTimeout(()=>requestAnimationFrame(step),1500);
+ }
+ requestAnimationFrame(step);
+})();
+
+const getFps=()=>S.fps!=null?S.fps:dispFps;
+const getFpsAvg=()=>S.fpsAvg!=null?S.fpsAvg:getFps();
+const getFps1Low=()=>S.fps1Low!=null?S.fps1Low:disp1Low;
+const getFps01Low=()=>S.fps01Low!=null?S.fps01Low:disp01Low;
+const getFt=()=>S.ft!=null?S.ft:dispFt;
+
+const MET=[
+ // Prestazioni grafiche
+ ["fps","FPS",()=>getFps()+" FPS",1,()=>Math.min(100,(getFps()||0)/2)],
+ ["fpsAvg","FPS Medi",()=>getFpsAvg()+" FPS",0,()=>Math.min(100,(getFpsAvg()||0)/2)],
+ ["fps1Low","1% Low",()=>getFps1Low()+" FPS",0,()=>Math.min(100,(getFps1Low()||0)/2)],
+ ["fps01Low","0.1% Low",()=>getFps01Low()+" FPS",0,()=>Math.min(100,(getFps01Low()||0)/2)],
+ ["ft","Frametime",()=>getFt().toFixed(1)+" ms",0,()=>Math.min(100,(getFt()||0)*3)],
+ ["ftGraph","Grafico FT",()=>`<canvas class="ft-mini" width="96" height="20"></canvas>`,0,()=>50],
+ ["tg","Temp. GPU",()=>U(S.tg),1,()=>S.tg||0],
+ ["tgHot","Hotspot GPU",()=>U(S.tgHot!=null?S.tgHot:(S.tg!=null?S.tg+7:null)),0,()=>S.tgHot||S.tg||0],
+ ["gpu","Uso GPU",()=>S.gpu!=null?Math.round(S.gpu)+"%":"0%",1,()=>S.gpu||0],
+ ["gclk","Clock GPU",()=>S.gclk!=null?Math.round(S.gclk)+" MHz":"-- MHz",0,()=>(S.gclk||0)/25],
+ ["gwatt","Potenza GPU",()=>S.gwatt!=null?Math.round(S.gwatt)+" W":"-- W",0,()=>(S.gwatt||0)/3],
+ ["vram","VRAM",()=>{
+  if(S.vram==null&&!S.vramTot)return"-- MB";
+  const used=Math.round(S.vram||0);
+  if(S.vramTot>0){
+   const free=Math.max(0,Math.round(S.vramTot-used));
+   return `${used}/${Math.round(S.vramTot)} MB (${free} lib.)`;
+  }
+  return used+" MB";
+ },0,()=>S.vramTot>0?((S.vram||0)/S.vramTot)*100:(S.vram||0)/80],
+ // Processore
+ ["tc","Temp. CPU",()=>U(S.tc),1,()=>S.tc||0],
+ ["cpu","Uso CPU",()=>Math.round(S.cpu||0)+"%",1,()=>S.cpu||0],
+ ["cpuCores","Core Max",()=>(S.cpuCoreMax!=null?S.cpuCoreMax:Math.round(S.cpu||0))+"%",0,()=>S.cpuCoreMax||S.cpu||0],
+ ["clk","Clock CPU",()=>(S.clk||0).toFixed(2)+" GHz",0,()=>(S.clk||0)*20],
+ ["watt","Potenza CPU",()=>S.watt!=null?Math.round(S.watt)+" W":"-- W",0,()=>S.watt||0],
+ // Memoria e sistema
+ ["ram","RAM",()=>{
+  const tot=S.ramT||16;
+  const used=+((S.ram||0)*tot/100).toFixed(1);
+  const free=Math.max(0,+(tot-used).toFixed(1));
+  return `${used}/${tot.toFixed(0)} GB (${free}G lib.)`;
+ },1,()=>S.ram||0],
+ ["disk","Uso Disco",()=>S.disk!=null?Math.round(S.disk)+"%":"0%",0,()=>S.disk||0],
+ ["ts","Temp. SSD",()=>U(S.ts),0,()=>S.ts||0],
+ ["fan","Ventole",()=>S.fans&&S.fans[0]?S.fans[0].v+" RPM":"0 RPM",0,()=>S.fans&&S.fans[0]?S.fans[0].v/30:0],
+ // Rete e Connessione
+ ["ping","Ping (Latenza)",()=>(S.ping!=null?Math.round(S.ping):"--")+" ms",1,()=>Math.min(100,S.ping||0)],
+ ["jitter","Jitter Rete",()=>(S.jitter!=null?(+S.jitter).toFixed(1):"0.0")+" ms",0,()=>Math.min(100,(S.jitter||0)*4)],
+ ["pktLoss","Packet Loss",()=>(S.pktLoss!=null?Math.round(S.pktLoss):0)+"%",0,()=>Math.min(100,(S.pktLoss||0)*10)],
+ ["netQuality","Rete (ms/Jit/Loss)",()=>`${S.ping!=null?Math.round(S.ping):"--"}ms • J:${S.jitter!=null?(+S.jitter).toFixed(1):"0.0"}ms • PL:${S.pktLoss!=null?Math.round(S.pktLoss):0}%`,0,()=>Math.min(100,S.ping||0)],
+ ["wifi","Rete ↓/↑",()=>`${mb(S.netRx)} ↓ ${mb(S.netTx)} ↑`,0,()=>S.wifi||0],
+ ["netDown","Download",()=>`${mb(S.netRx)} (${((S.netRx||0)*8).toFixed(1)} Mbps)`,0,()=>Math.min(100,(S.netRx||0)*8)],
+ ["netUp","Upload",()=>`${mb(S.netTx)} (${((S.netTx||0)*8).toFixed(1)} Mbps)`,0,()=>Math.min(100,(S.netTx||0)*16)],
+ // Informazioni di sessione
+ ["gameName","Gioco",()=>S.game||"Desktop",0,()=>100],
+ ["sessionTime","Sessione",()=>fmtDur(S.sessionDurSec),0,()=>100],
+ ["time","Orario",()=>new Date().toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"}),0,()=>50]
+];
+
+// Mostra SEMPRE tutti i parametri spuntati dall'utente nel checkbox senza nasconderne alcuno
+const avail=()=>true;
+
+pz.onData(d=>{
+ Object.assign(S,d);
+ for(const k of["tc","tg","tgHot","ts","tm"])if(S[k]!=null&&!(S[k]>15&&S[k]<125&&Math.abs(S[k]-16.85)>0.4))S[k]=null;
+ render();
+});
+pz.onCfg(c=>{C=c;unit=c.unit||"°C";lw=0;lh=0;render()});
+
+function stepZoom(delta){
+ if(!C)return;
+ C.sz=delta===0?100:Math.max(50,Math.min(220,Math.round((C.sz||100)+delta)));
+ lw=0;lh=0;
+ render();
+ if(pz.updateWidget)pz.updateWidget({id:C.id,sz:C.sz,customW:C.customW});
+}
+
+function drawFtMini(cv){
+ if(!cv)return;
+ const ctx=cv.getContext("2d");
+ const w=cv.width,h=cv.height;
+ ctx.clearRect(0,0,w,h);
+ const arr=(S.ftHist&&S.ftHist.length>=2)?S.ftHist:dispFtHist;
+ if(!arr||arr.length<2){
+  ctx.fillStyle="#8da4d0";
+  ctx.font="9px Consolas,monospace";
+  ctx.fillText("FT live",6,13);
+  return;
+ }
+ const lo=Math.max(1,Math.min(...arr)*0.85);
+ const hi=Math.max(lo+8,Math.max(...arr)*1.1);
+ ctx.strokeStyle=(C&&C.ac)||"#00d4ff";
+ ctx.lineWidth=1.6;
+ ctx.beginPath();
+ arr.forEach((v,i)=>{
+  const px=(i/(arr.length-1))*(w-4)+2;
+  const py=h-2-Math.min(1,Math.max(0,(v-lo)/(hi-lo)))*(h-4);
+  if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+ });
+ ctx.stroke();
+}
+
+function render(){
+ if(!C)return;
+ const ms=MET.filter(m=>(C.m||[]).includes(m[0])&&avail(m[0]));
+ if(mode=="overlay"){
+  let o=document.getElementById("ov");if(!o){o=document.createElement("div");o.id="ov";document.body.append(o)}
+  const z=Math.max(0.5,Math.min(2.4,(C.sz||100)/100));
+  o.className="ov"+(C.lay=="h"?" h":"");
+  o.style.cssText=`background:rgba(5,9,20,${(C.op!=null?C.op:55)/100});border:1px solid ${C.ac||"#00d4ff"}90;transform-origin:top left;transform:scale(${z})`;
+  o.innerHTML=ms.map(m=>`<div class="ov-item"><span class="ov-lbl">${m[1]}</span><b style="color:${C.ac||"#00d4ff"}">${m[2]()}</b></div>`).join("")||`<div class="ov-item"><b>PeppeZ Hardware Analytics HUD</b></div>`;
+  drawFtMini(o.querySelector("canvas.ft-mini"));
+  const ow=o.offsetWidth*z,oh=o.offsetHeight*z,mg=20;
+  const pos=C.pos||"tl";
+  const x=C.rx!=null?Math.max(6,Math.min(innerWidth-ow-6,C.rx*innerWidth)):(pos[1]=="l"?mg:Math.max(mg,innerWidth-ow-mg));
+  const y=C.ry!=null?Math.max(6,Math.min(innerHeight-oh-6,C.ry*innerHeight)):(pos[0]=="t"?mg:Math.max(mg,innerHeight-oh-mg));
+  o.style.left=Math.round(x)+"px";o.style.top=Math.round(y)+"px";
+  return;
+ }
+ const w=document.getElementById("w");
+ const wBody=document.getElementById("w-body");
+ if(!w||!wBody)return;
+ const z=Math.max(0.5,Math.min(2.4,(C.sz||100)/100));
+ const minW=C.customW?Math.max(175,Math.min(620,C.customW)):185;
+ w.style.cssText=`transform-origin:top left;transform:scale(${z});min-width:${minW}px;background:${C.st=="solid"?"#081126":C.st=="minimal"?"rgba(5,9,20,0.20)":"rgba(7,14,34,"+(C.op!=null?C.op:65)/100+")"};border:${C.st=="minimal"?"1px solid #ffffff22":"1px solid "+(C.ac||"#00d4ff")+"80"};backdrop-filter:blur(10px)`;
+ const hdr=`<div class="whdr"><span>PZ Analytics</span><div class="wbar"><span class="zval">${Math.round(C.sz||100)}%</span><button title="Riduci dimensione (-10%)" onclick="stepZoom(-10)">−</button><button title="Ripristina 100%" onclick="stepZoom(0)">↺</button><button title="Aumenta dimensione (+10%)" onclick="stepZoom(10)">+</button></div></div>`;
+ let h="";
+ if(C.type=="list"){
+  h=hdr+(ms.map(m=>`<div class="row"><span class="m">${m[1]}</span><b style="color:${C.ac}">${m[2]()}</b></div>`).join("")||`<div class="m">Seleziona parametri...</div>`);
+ }else if(C.type=="gauge"){
+  h=hdr+`<div class="gs">${ms.map(m=>`<div style="text-align:center;min-width:74px"><div class="ring" style="--p:${Math.max(0,Math.min(100,m[4]()))};--col:${C.ac}"><div>${m[0]==="ftGraph"?"FT":m[2]()}</div></div><span class="m">${m[1]}</span></div>`).join("")||`<div class="m">Nessun sensore selezionato</div>`}</div>`;
+ }else if(C.type=="clock"){
+  h=hdr+`<div class="clk">${new Date().toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"})}</div><div class="m" style="margin:3px 0 7px">${new Date().toLocaleDateString("it-IT",{weekday:"short",day:"numeric",month:"short"})}</div><div style="display:flex;flex-wrap:wrap;gap:6px 12px;max-width:360px">${ms.filter(m=>m[0]!="time").map(m=>`<span class="m">${m[1]} <b style="color:${C.ac};font-size:12.5px">${m[2]()}</b></span>`).join("")}</div>`;
+ }else if(C.type=="bar"){
+  h=hdr+`<div class="barwrap">${ms.map(m=>`<div><div class="m">${m[1]}</div><b style="color:${C.ac};font-size:13.5px">${m[2]()}</b></div>`).join("")||`<span class="m">Seleziona parametri...</span>`}</div>`;
+ }else{
+  const m=ms[0]||MET[0];
+  const a=H[m[0]]=H[m[0]]||[];a.push(m[4]());if(a.length>60)a.shift();
+  const extra=ms.slice(1).map(x=>`<div class="row"><span class="m">${x[1]}</span><b style="color:${C.ac}">${x[2]()}</b></div>`).join("");
+  h=hdr+`<div style="display:flex;justify-content:space-between;align-items:center"><span class="m">${m[1]}</span><b style="color:${C.ac}">${m[2]()}</b></div><canvas class="w-graph" width="430" height="132"></canvas>${extra?`<div style="margin-top:5px;border-top:1px solid #ffffff14;padding-top:3px">${extra}</div>`:""}`;
+ }
+ wBody.innerHTML=h;
+ drawFtMini(wBody.querySelector("canvas.ft-mini"));
+ if(C.type=="graph"){
+  const m=ms[0]||MET[0];
+  const cv=wBody.querySelector("canvas.w-graph");
+  if(m&&cv){
+   const a=H[m[0]]||[0],x=cv.getContext("2d");
+   let lo=Math.min(...a),hi=Math.max(...a);if(hi-lo<10){const c=(hi+lo)/2;lo=c-5;hi=c+5}
+   x.strokeStyle=C.ac||"#00d4ff";x.lineWidth=3;x.beginPath();
+   a.forEach((v,i)=>{const px=a.length>1?i/(a.length-1)*430:0,py=126-(v-lo)/(hi-lo)*116;i?x.lineTo(px,py):x.moveTo(px,py)});
+   x.stroke();
+  }
+ }
+ const tw=Math.ceil(w.offsetWidth*z)+8,th=Math.ceil(w.offsetHeight*z)+8;
+ if(Math.abs(tw-lw)>2||Math.abs(th-lh)>2){lw=tw;lh=th;pz.resize(tw,th)}
+}
+
+// Inizializzazione persistente del ridimensionamento tramite maniglia angolare e rotella mouse
+(function initResizeInteraction(){
+ const rz=document.getElementById("rz");
+ const w=document.getElementById("w");
+ if(rz){
+  rz.onpointerdown=ev=>{
+   if(!C)return;
+   ev.preventDefault();
+   ev.stopPropagation();
+   const startX=ev.screenX,startY=ev.screenY;
+   const startSz=C.sz||100;
+   const startW=C.customW||(w?w.offsetWidth:195);
+   try{rz.setPointerCapture(ev.pointerId)}catch(e){}
+   rz.onpointermove=mv=>{
+    const dx=mv.screenX-startX;
+    const dy=mv.screenY-startY;
+    if(mv.shiftKey){
+     C.customW=Math.max(175,Math.min(620,Math.round(startW+dx)));
+    }else{
+     const delta=(dx+dy)*0.32;
+     C.sz=Math.max(50,Math.min(220,Math.round(startSz+delta)));
+    }
+    lw=0;lh=0;
+    render();
+   };
+   const finish=()=>{
+    rz.onpointermove=null;
+    rz.onpointerup=null;
+    rz.onpointercancel=null;
+    if(pz.updateWidget&&C){
+     pz.updateWidget({id:C.id,sz:C.sz,customW:C.customW,w:lw,h:lh});
+    }
+   };
+   rz.onpointerup=finish;
+   rz.onpointercancel=finish;
+  };
+ }
+ if(w){
+  w.addEventListener("wheel",ev=>{
+   if(!C)return;
+   if(ev.ctrlKey||ev.altKey){
+    ev.preventDefault();
+    stepZoom(ev.deltaY<0?8:-8);
+   }
+  },{passive:false});
+ }
+})();
+</script></body></html>
